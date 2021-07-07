@@ -139,9 +139,9 @@ class MQuantise(torch.nn.Module):
         self.dequant = torch.quantization.DeQuantStub()
         self.model = model
         
-    def forward(self, x):
+    def forward(self, x, y):
         x = self.quant(x)
-        x = self.model(x)
+        x = self.model(x,y)
         x = self.dequant(x)
         return x
         
