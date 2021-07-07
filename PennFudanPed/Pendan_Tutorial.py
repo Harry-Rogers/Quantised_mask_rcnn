@@ -1,15 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Wed Jul  7 17:08:12 2021
-
-@author: harry
-"""
-
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Jul  7 16:48:37 2021
+Created on Wed Jul  7 17:38:04 2021
 
 @author: harry
 """
@@ -97,6 +89,8 @@ class PennFudanDataset(object):
     def __len__(self):
         return len(self.imgs)
     
+
+
 def get_model_instance_segmentation(num_classes):
     # load an instance segmentation model pre-trained pre-trained on COCO
     model = torchvision.models.detection.maskrcnn_resnet50_fpn(pretrained=True)
@@ -114,15 +108,8 @@ def get_model_instance_segmentation(num_classes):
     model.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask,
                                                        hidden_layer,
                                                        num_classes)
-    
-    model.train()
-    #model.fuse_modules()
-    quant_mod = MQuantise(model)
-    quant_mod.qconfig = torch.quantization.get_default_qconfig('qnnpack')
-    #quant_mod.conv2.qconfig = None
-    torch.backends.quantized.engine = "qnnpack"
-    model_static_quantized = torch.quantization.prepare_qat(quant_mod, inplace=True)
-    return model_static_quantized
+
+    return model
 
 def get_transform(train):
     transforms = []
@@ -130,22 +117,6 @@ def get_transform(train):
     if train:
         transforms.append(T.RandomHorizontalFlip(0.5))
     return T.Compose(transforms)
-
-
-class MQuantise(torch.nn.Module):
-    def __init__(self, model):
-        super(MQuantise, self).__init__()
-        self.quant = torch.quantization.QuantStub()
-        self.dequant = torch.quantization.DeQuantStub()
-        self.model = model
-        
-    def forward(self, x):
-        x = self.quant(x)
-        x = self.model(x)
-        x = self.dequant(x)
-        return x
-        
-
 
 def main():
     # train on the GPU or on the CPU, if a GPU is not available
@@ -170,10 +141,13 @@ def main():
     data_loader_test = torch.utils.data.DataLoader(
         dataset_test, batch_size=1, shuffle=False, num_workers=0,
         collate_fn=utils.collate_fn)
+
+    
     
     # get the model using our helper function
     
     model = get_model_instance_segmentation(num_classes)
+
     # move model to the right device
     model.to(device)
 
@@ -187,10 +161,21 @@ def main():
                                                    step_size=3,
                                                    gamma=0.1)
     
-    
+    #Change to CPU or error, data is in cpu so send model there
+    model.to('cpu')
+    # For Training
+    images,targets = next(iter(data_loader))
+    images = list(image for image in images)
+    targets = [{k: v for k, v in t.items()} for t in targets]
+    output = model(images,targets)   # Returns losses and detections
+    # For inference
+    model.eval()
+    x = [torch.rand(3, 300, 400), torch.rand(3, 500, 400)]
+    predictions = model(x)           # Returns predictions
     # let's train it for 10 epochs
     num_epochs = 10
-
+    #Send model back to gpu to train
+    model.to(device)
     for epoch in range(num_epochs):
         # train for one epoch, printing every 10 iterations
         train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq=10)
@@ -198,14 +183,10 @@ def main():
         lr_scheduler.step()
         # evaluate on the test dataset
         evaluate(model, data_loader_test, device=device)
-    
-    #Set to CPU for quantization
-    model.cpu()
-    #Quantize
-    model_quantized_and_trained = torch.quantization.convert(model, inplace=False)
+
     print("That's it!")
     model.eval()
-    s = torch.jit.script(model_quantized_and_trained)
+    s = torch.jit.script(model)
     torch.jit.save(s, 'masked.pt')
 if __name__ == "__main__":
     main()

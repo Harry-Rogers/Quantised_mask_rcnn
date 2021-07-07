@@ -108,7 +108,7 @@ def get_model_instance_segmentation(num_classes):
                                                        num_classes)
     
     model.train()
-    quant_mod = MQuantise(model)
+    quant_mod = MQuantise_backbone(model)
     quant_mod.qconfig = torch.quantization.get_default_qconfig('qnnpack')
     #quant_mod.conv2.qconfig = None
     torch.backends.quantized.engine = "qnnpack"
@@ -123,9 +123,9 @@ def get_transform(train):
     return T.Compose(transforms)
 
 
-class MQuantise(torch.nn.Module):
+class MQuantise_backbone(torch.nn.Module):
     def __init__(self, model):
-        super(MQuantise, self).__init__()
+        super(MQuantise_backbone, self).__init__()
         self.quant = torch.quantization.QuantStub()
         self.dequant = torch.quantization.DeQuantStub()
         self.backbone = model.backbone
