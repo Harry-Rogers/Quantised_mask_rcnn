@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
+Created on Wed Jul  7 17:08:12 2021
+
+@author: harry
+"""
+
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
 Created on Wed Jul  7 16:48:37 2021
 
 @author: harry
@@ -129,17 +137,13 @@ class MQuantise(torch.nn.Module):
         super(MQuantise, self).__init__()
         self.quant = torch.quantization.QuantStub()
         self.dequant = torch.quantization.DeQuantStub()
-        self.backbone = model.backbone
-        self.rpn = model.rpn
-        self.head = model.roi_heads
+        self.model = model
         
     def forward(self, x):
         x = self.quant(x)
-        features_quant = self.backbone(x)
-        features = self.dequant(features_quant)
-        proposals = self.rpn(features)
-        head_results = self.head(features, proposals)
-        return head_results
+        x = self.model(x)
+        x = self.dequant(x)
+        return x
         
 
 
